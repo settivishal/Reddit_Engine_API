@@ -50,11 +50,11 @@ func (s *APIServer) Start() {
 	r.POST("/leave", s.leaveSubreddit)      // DONE
 	r.POST("/vote", s.vote)                 // DONE
 	r.POST("/comment", s.createComment)     // DONE
-	r.GET("/karma/:username", s.getKarma)
+	r.GET("/karma/:username", s.getKarma)   // DONE
 	// r.GET("/feed/:username", s.getFeed)
-	r.POST("/message", s.sendDirectMessage)
-	r.GET("/messages/:username", s.getDirectMessages)
-	r.POST("/reply", s.replyDirectMessage)
+	r.POST("/message", s.sendDirectMessage)           // DONE
+	r.GET("/messages/:username", s.getDirectMessages) // DONE
+	r.POST("/reply", s.replyDirectMessage)            // DONE
 
 	r.Run(":8080") // RUNS ON PORT 8080
 }
@@ -352,14 +352,31 @@ func (s *APIServer) getKarma(c *gin.Context) {
 	username := c.Param("username")
 	req := &messages.GetKarma{Username: username}
 
-	future := s.system.Root.RequestFuture(s.engine, req, 5*time.Second)
+	future := s.system.Root.RequestFuture(s.engine, &messages.GetKarma{
+		Username: req.Username,
+	}, 10*time.Second)
+
 	result, err := future.Result()
+
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process request"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch karma"})
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	response, ok := result.(*messages.GetKarmaResponse)
+
+	if !ok {
+		log.Printf("Invalid response type: %v", result)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid response from server"})
+		return
+	}
+
+	if response.Success {
+		c.JSON(http.StatusOK, gin.H{"message": "Karma fetched successfully", "total": response.TotalKarma})
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": response.Error})
+	}
+
 }
 
 // func (s *APIServer) getFeed(c *gin.Context) {
@@ -377,49 +394,110 @@ func (s *APIServer) getKarma(c *gin.Context) {
 // }
 
 func (s *APIServer) sendDirectMessage(c *gin.Context) {
-	var req messages.SendDirectMessage
-	if err := c.BindJSON(&req); err != nil {
+	var req struct {
+		FromUser string `json:"fromuser" binding:"required"`
+		ToUser   string `json:"touser" binding:"required"`
+		Content  string `json:"content" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	future := s.system.Root.RequestFuture(s.engine, &req, 5*time.Second)
+	future := s.system.Root.RequestFuture(s.engine, &messages.SendDirectMessage{
+		FromUser: req.FromUser,
+		ToUser:   req.ToUser,
+		Content:  req.Content,
+	}, 5*time.Second)
+
 	result, err := future.Result()
+
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process request"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	response, ok := result.(*messages.SendDirectMessageResponse)
+
+	if !ok {
+		log.Printf("Invalid response type: %v", result)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid response from server"})
+		return
+	}
+
+	if response.Success {
+		c.JSON(http.StatusOK, gin.H{"response": "successfully sent message", "message": response.Message})
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to send direct message"})
+	}
 }
 
 func (s *APIServer) getDirectMessages(c *gin.Context) {
 	username := c.Param("username")
 	req := &messages.GetDirectMessages{Username: username}
 
-	future := s.system.Root.RequestFuture(s.engine, req, 5*time.Second)
+	future := s.system.Root.RequestFuture(s.engine, &messages.GetDirectMessages{
+		Username: req.Username,
+	}, 5*time.Second)
+
 	result, err := future.Result()
+
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process request"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch direct messages"})
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	response, ok := result.(*messages.GetDirectMessagesResponse)
+
+	if !ok {
+		log.Printf("Invalid response type: %v", result)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid response from server"})
+		return
+	}
+
+	// ARRAY OF DMS FROM RECIEVED FROM A PERSON
+	c.JSON(http.StatusOK, gin.H{"message": "Direct messages fetched successfully", "messages": response.Messages})
+
 }
 
 func (s *APIServer) replyDirectMessage(c *gin.Context) {
-	var req messages.ReplyDirectMessage
-	if err := c.BindJSON(&req); err != nil {
+	var req struct {
+		FromUser         string `json:"fromuser" binding:"required"`
+		ReplyToMessageId string `json:"replytomessageid" binding:"required"`
+		Content          string `json:"content" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	future := s.system.Root.RequestFuture(s.engine, &req, 5*time.Second)
+	future := s.system.Root.RequestFuture(s.engine, &messages.ReplyDirectMessage{
+		FromUser:         req.FromUser,
+		ReplyToMessageId: req.ReplyToMessageId,
+		Content:          req.Content,
+	}, 5*time.Second)
+
 	result, err := future.Result()
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process request"})
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	response, ok := result.(*messages.ReplyDirectMessageResponse)
+
+	if !ok {
+		log.Printf("Invalid response type: %v", result)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid response from server"})
+		return
+	}
+
+	if response.Success {
+		c.JSON(http.StatusOK, gin.H{"response": "successfully replied to message", "message": response.Message})
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to reply to direct message"})
+	}
+
 }
