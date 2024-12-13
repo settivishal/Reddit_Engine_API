@@ -18,6 +18,7 @@ func (su *SimulatedUser) Register() bool {
 	}
 
 	response, ok := result.(*messages.RegisterUserResponse)
+
 	if !ok {
 		log.Printf("Invalid response type: %v", result)
 		return false

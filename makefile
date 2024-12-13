@@ -28,7 +28,6 @@ help:
 	@echo "  proto           Generate Go code from Protobuf files"
 	@echo "  build           Build the engine and simulator binaries"
 	@echo "  run-engine      Run the engine process (starts on port 8080)"
-	@echo "  run-simulator   Run the simulator process (starts on port 8081)"
 	@echo "  all             Generate Protobuf files and build the project"
 	@echo "  clean           Remove generated files and binaries"
 	@echo "  help            Show this help message"
@@ -45,17 +44,12 @@ $(GO_OUT_DIR)/%.pb.go: $(PROTO_DIR)/%.proto
 build:
 	@echo "Building the project..."
 	go build -o engine ./engine/main.go
-	go build -o simulator ./simulator/main.go
 
 # Run the engine
 run-engine:
 	@echo "Starting the engine..."
 	@go run ./engine/main.go
 
-# Run the simulator
-run-simulator:
-	@echo "Starting the simulator..."
-	@go run ./simulator/main.go
 
 # Clean up generated and built files
 clean:
